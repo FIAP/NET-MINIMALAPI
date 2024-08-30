@@ -1,9 +1,25 @@
+using dotnet_minimalapi.Models;
+using Microsoft.OpenApi.Models;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "Stocks API",
+        Version = "v1",
+        Description = "Descrição da Sua API",
+        Contact = new OpenApiContact
+        {
+            Name = "Thiago S Adriano",
+            Email = "prof.thiagoadriano@teste.com",
+        }
+    });
+});
 
 var app = builder.Build();
 
@@ -14,29 +30,53 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
 
-app.MapGet("/weatherforecast", () =>
+var stocks = new List<Stock>();
+
+
+app.MapGet("/stocks", () => stocks)
+    .CacheOutput(policy =>
+    {
+        policy.SetVaryByRouteValue("param");
+        policy.Expire(TimeSpan.FromMinutes(10));
+    });
+
+app.MapGet("/stocks/{id}", (int id) => stocks.FirstOrDefault(sa => sa.Id == id))
+    .CacheOutput(policy =>
+    {
+        policy.Expire(TimeSpan.FromMinutes(10));
+    });
+
+
+app.MapPost("/stocks", (Stock stockActivity) =>
 {
-    var forecast = Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast")
-.WithOpenApi();
+    stockActivity.Id = stocks.Count + 1;
+    stocks.Add(stockActivity);
+    return Results.Created($"/stocks/{stockActivity.Id}", stockActivity);
+});
+
+app.MapPut("/stocks/{id}", (int id, Stock stockActivity) =>
+{
+    var existingActivity = stocks.FirstOrDefault(sa => sa.Id == id);
+    if (existingActivity != null)
+    {
+        existingActivity.Symbol = stockActivity.Symbol;
+        existingActivity.Action = stockActivity.Action;
+        existingActivity.Quantity = stockActivity.Quantity;
+        return Results.NoContent();
+    }
+    return Results.NotFound();
+});
+
+app.MapDelete("/stocks/{id}", (int id) =>
+{
+    var existingActivity = stocks.FirstOrDefault(sa => sa.Id == id);
+    if (existingActivity != null)
+    {
+        stocks.Remove(existingActivity);
+        return Results.NoContent();
+    }
+    return Results.NotFound();
+});
 
 app.Run();
-
-internal record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
