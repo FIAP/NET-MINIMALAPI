@@ -4,52 +4,61 @@ namespace dotnet_minimalapi;
 
 public static class StockEndpoints
 {
+    private static List<Stock> stocks = new List<Stock>(); 
+
     public static void MapStockEndpoints(this WebApplication app)
     {
-        var stocks = new List<Stock>();
+        var stocksGroup = app.MapGroup("/stocks");
 
-        app.MapGet("/stocks", () => stocks)
-            .CacheOutput(policy =>
-            {
-                policy.SetVaryByRouteValue("param");
-                policy.Expire(TimeSpan.FromMinutes(10));
-            });
+        stocksGroup.MapGet("/", GetAllStocks);
+        stocksGroup.MapGet("/{id}", GetStock);
+        stocksGroup.MapPost("/", CreateStock);
+        stocksGroup.MapPut("/{id}", UpdateStock);
+        stocksGroup.MapDelete("/{id}", DeleteStock);
+    }
 
-        app.MapGet("/stocks/{id}", (int id) => stocks.FirstOrDefault(sa => sa.Id == id))
-            .CacheOutput(policy =>
-            {
-                policy.Expire(TimeSpan.FromMinutes(10));
-            });
+    private static async Task<IResult> GetAllStocks()
+    {
+        return TypedResults.Ok(stocks);
+    }
 
-        app.MapPost("/stocks", (Stock stockActivity) =>
+    private static async Task<IResult> GetStock(int id)
+    {
+        var stock = stocks.FirstOrDefault(sa => sa.Id == id);
+        return stock is not null ? TypedResults.Ok(stock) : TypedResults.NotFound();
+    }
+
+    private static async Task<IResult> CreateStock(Stock stockActivity)
+    {
+        stockActivity.Id = stocks.Count + 1;
+        stocks.Add(stockActivity);
+        return TypedResults.Created($"/stocks/{stockActivity.Id}", stockActivity);
+    }
+
+    private static async Task<IResult> UpdateStock(int id, Stock stockActivity)
+    {
+        var existingActivity = stocks.FirstOrDefault(sa => sa.Id == id);
+
+        if (existingActivity is null)
+            return TypedResults.NotFound();
+
+        existingActivity.Symbol = stockActivity.Symbol;
+        existingActivity.Action = stockActivity.Action;
+        existingActivity.Quantity = stockActivity.Quantity;
+
+        return TypedResults.NoContent();
+    }
+
+    private static async Task<IResult> DeleteStock(int id)
+    {
+        var existingActivity = stocks.FirstOrDefault(sa => sa.Id == id);
+
+        if (existingActivity is not null)
         {
-            stockActivity.Id = stocks.Count + 1;
-            stocks.Add(stockActivity);
-            return Results.Created($"/stocks/{stockActivity.Id}", stockActivity);
-        });
+            stocks.Remove(existingActivity);
+            return TypedResults.NoContent();
+        }
 
-        app.MapPut("/stocks/{id}", (int id, Stock stockActivity) =>
-        {
-            var existingActivity = stocks.FirstOrDefault(sa => sa.Id == id);
-            if (existingActivity != null)
-            {
-                existingActivity.Symbol = stockActivity.Symbol;
-                existingActivity.Action = stockActivity.Action;
-                existingActivity.Quantity = stockActivity.Quantity;
-                return Results.NoContent();
-            }
-            return Results.NotFound();
-        });
-
-        app.MapDelete("/stocks/{id}", (int id) =>
-        {
-            var existingActivity = stocks.FirstOrDefault(sa => sa.Id == id);
-            if (existingActivity != null)
-            {
-                stocks.Remove(existingActivity);
-                return Results.NoContent();
-            }
-            return Results.NotFound();
-        });
+        return TypedResults.NotFound();
     }
 }
