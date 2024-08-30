@@ -17,48 +17,33 @@ public static class StockEndpoints
         stocksGroup.MapDelete("/{id}", DeleteStock);
     }
 
-    private static async Task<IResult> GetAllStocks()
+    static async Task<IResult> GetAllStocks(IStockService stockService)
     {
+        var stocks = await stockService.GetAllStocksAsync();
         return TypedResults.Ok(stocks);
     }
 
-    private static async Task<IResult> GetStock(int id)
+    static async Task<IResult> GetStock(int id, IStockService stockService)
     {
-        var stock = stocks.FirstOrDefault(sa => sa.Id == id);
+        var stock = await stockService.GetStockByIdAsync(id);
         return stock is not null ? TypedResults.Ok(stock) : TypedResults.NotFound();
     }
 
-    private static async Task<IResult> CreateStock(Stock stockActivity)
+    static async Task<IResult> CreateStock(Stock stockActivity, IStockService stockService)
     {
-        stockActivity.Id = stocks.Count + 1;
-        stocks.Add(stockActivity);
+        await stockService.AddStockAsync(stockActivity);
         return TypedResults.Created($"/stocks/{stockActivity.Id}", stockActivity);
     }
 
-    private static async Task<IResult> UpdateStock(int id, Stock stockActivity)
+    static async Task<IResult> UpdateStock(int id, Stock stockActivity, IStockService stockService)
     {
-        var existingActivity = stocks.FirstOrDefault(sa => sa.Id == id);
-
-        if (existingActivity is null)
-            return TypedResults.NotFound();
-
-        existingActivity.Symbol = stockActivity.Symbol;
-        existingActivity.Action = stockActivity.Action;
-        existingActivity.Quantity = stockActivity.Quantity;
-
-        return TypedResults.NoContent();
+        var success = await stockService.UpdateStockAsync(id, stockActivity);
+        return success ? TypedResults.NoContent() : TypedResults.NotFound();
     }
 
-    private static async Task<IResult> DeleteStock(int id)
+    static async Task<IResult> DeleteStock(int id, IStockService stockService)
     {
-        var existingActivity = stocks.FirstOrDefault(sa => sa.Id == id);
-
-        if (existingActivity is not null)
-        {
-            stocks.Remove(existingActivity);
-            return TypedResults.NoContent();
-        }
-
-        return TypedResults.NotFound();
+        var success = await stockService.DeleteStockAsync(id);
+        return success ? TypedResults.NoContent() : TypedResults.NotFound();
     }
 }
